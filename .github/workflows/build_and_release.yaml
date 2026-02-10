@@ -52,18 +52,25 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
         matrix:
-          os: [ windows-latest, ubuntu-latest ]
+          os: [ windows-latest, ubuntu-latest, centos-latest]
         fail-fast: false
     steps:
       - name: Install Dependencies
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y \
-            libpixman-1-dev libfreetype6-dev libharfbuzz-dev zlib1g-dev \
-            libx11-dev libxcursor-dev libxi-dev libxrandr-dev libgl1-mesa-dev \
-            libfontconfig1-dev
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y \
+              libpixman-1-dev libfreetype6-dev libharfbuzz-dev zlib1g-dev \
+              libx11-dev libxcursor-dev libxi-dev libxrandr-dev libgl1-mesa-dev \
+              libfontconfig1-dev
+          elif [[ "${{ matrix.os }}" == "centos-latest" ]]; then
+            sudo dnf install -y \
+              pixman-devel freetype-devel harfbuzz-devel zlib-devel \
+              libX11-devel libXcursor-devel libXi-devel libXrandr-devel mesa-libGL-devel \
+              fontconfig-devel cmake ninja-build git wget unzip
+          fi
       - uses: actions/checkout@v4
       - name: Install Aseprite
         shell: bash
@@ -116,6 +123,13 @@ jobs:
         working-directory: aseprite
         run: |
           cd build && ninja
+      - name: Package as RPM
+        if: matrix.os == 'centos-latest'
+        working-directory: aseprite/build
+        shell: bash
+        run: |
+          cpack -G RPM
+          mv *.rpm ../Aseprite-${{ needs.create-release.outputs.release-tag }}-RHEL.rpm
       - name: Clean Up Build folder
         working-directory: aseprite/build/bin
         shell: bash
@@ -130,6 +144,10 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: aseprite/build/bin/Aseprite-${{ needs.create-release.outputs.release-tag }}-${{ runner.os }}.zip
-          asset_name: Aseprite-${{ needs.create-release.outputs.release-tag }}-${{ runner.os }}.zip
+          file: |
+            aseprite/build/bin/Aseprite-${{ needs.create-release.outputs.release-tag }}-${{ runner.os }}.zip
+            aseprite/build/Aseprite-${{ needs.create-release.outputs.release-tag }}-RHEL.rpm
+          asset_name: |
+            Aseprite-${{ needs.create-release.outputs.release-tag }}-${{ runner.os }}.zip
+            Aseprite-${{ needs.create-release.outputs.release-tag }}-RHEL.rpm
           tag: ${{ needs.create-release.outputs.release-tag }}
